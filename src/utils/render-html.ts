@@ -1,3 +1,4 @@
+import { Marked } from "marked";
 import type { Message } from "@/types.js";
 
 function escapeHtml(str: string): string {
@@ -9,6 +10,23 @@ function escapeHtml(str: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// Assistant text can quote arbitrary content (web pages, tool output) that
+// might contain raw HTML. Render markdown normally, but escape any literal
+// HTML in the source instead of passing it through — otherwise a quoted
+// <script> tag would become live, executable markup in the output file.
+const markdown = new Marked({ gfm: true, breaks: true });
+markdown.use({
+  renderer: {
+    html({ text }) {
+      return escapeHtml(text);
+    },
+  },
+});
+
+function renderMarkdown(text: string): string {
+  return markdown.parse(text, { async: false }) as string;
+}
+
 function stringifyValue(value: unknown): string {
   if (typeof value === "string") return value;
   try {
@@ -18,10 +36,16 @@ function stringifyValue(value: unknown): string {
   }
 }
 
+function renderText(text: string, role: string): string {
+  return role === "assistant"
+    ? `<div class="markdown">${renderMarkdown(text)}</div>`
+    : `<div class="text">${escapeHtml(text)}</div>`;
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: message parts are a large discriminated union
-function renderPart(part: any): string {
+function renderPart(part: any, role: string): string {
   if (part.type === "text") {
-    return `<div class="text">${escapeHtml(part.text ?? "")}</div>`;
+    return renderText(part.text ?? "", role);
   }
 
   if (typeof part.type === "string" && part.type.startsWith("tool-")) {
@@ -48,12 +72,12 @@ function renderMessage(msg: Message): string {
   // biome-ignore lint/suspicious/noExplicitAny: parts/createdAt aren't on the base Message type
   const anyMsg = msg as any;
   const partsHtml: string[] = Array.isArray(anyMsg.parts)
-    ? anyMsg.parts.map(renderPart).filter(Boolean)
+    ? anyMsg.parts.map((p: any) => renderPart(p, msg.role)).filter(Boolean)
     : [];
 
   const body = partsHtml.length
     ? partsHtml.join("\n")
-    : `<div class="text">${escapeHtml(anyMsg.content ?? "")}</div>`;
+    : renderText(anyMsg.content ?? "", msg.role);
 
   const time = anyMsg.createdAt
     ? new Date(anyMsg.createdAt).toLocaleString()
@@ -63,13 +87,21 @@ function renderMessage(msg: Message): string {
     ? `${msg.role} · ${anyMsg._originKind}`
     : msg.role;
 
+  // System (automated) messages are usually noise — skill preambles, task
+  // notifications, command echoes — so collapse them by default. The role
+  // and timestamp stay visible either way.
+  const bodyHtml =
+    msg.role === "system"
+      ? `<details class="collapsed-body"><summary>Show content</summary>${body}</details>`
+      : `<div class="body">${body}</div>`;
+
   return `
     <article class="message role-${escapeHtml(msg.role)}">
       <header>
         <span class="role">${escapeHtml(roleLabel)}</span>
         <span class="time">${escapeHtml(time)}</span>
       </header>
-      <div class="body">${body}</div>
+      ${bodyHtml}
     </article>
   `;
 }
@@ -131,6 +163,36 @@ export function renderConversationToHtml(
     overflow-x: auto; font-size: .78rem; background: var(--code-bg);
     padding: .5rem; border-radius: 6px; margin: .4rem 0 0;
   }
+  .collapsed-body summary {
+    cursor: pointer; font-size: .8rem; color: var(--muted);
+  }
+  .collapsed-body[open] summary { margin-bottom: .5rem; }
+  .markdown :first-child { margin-top: 0; }
+  .markdown :last-child { margin-bottom: 0; }
+  .markdown { line-height: 1.55; word-wrap: break-word; }
+  .markdown p { margin: 0 0 .75em; }
+  .markdown ul, .markdown ol { margin: 0 0 .75em; padding-left: 1.4em; }
+  .markdown li { margin: .2em 0; }
+  .markdown a { color: inherit; text-decoration-color: var(--muted); }
+  .markdown code {
+    background: var(--code-bg); padding: .1em .35em; border-radius: 4px;
+    font-size: .85em;
+  }
+  .markdown pre {
+    background: var(--code-bg); padding: .6em .8em; border-radius: 6px;
+    overflow-x: auto; margin: 0 0 .75em;
+  }
+  .markdown pre code { background: none; padding: 0; }
+  .markdown blockquote {
+    margin: 0 0 .75em; padding-left: .8em; border-left: 3px solid var(--border);
+    color: var(--muted);
+  }
+  .markdown h1, .markdown h2, .markdown h3, .markdown h4 {
+    margin: 1em 0 .4em; line-height: 1.3;
+  }
+  .markdown table { border-collapse: collapse; margin: 0 0 .75em; font-size: .9em; }
+  .markdown th, .markdown td { border: 1px solid var(--border); padding: .3em .6em; }
+  .markdown hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
 </style>
 </head>
 <body>
