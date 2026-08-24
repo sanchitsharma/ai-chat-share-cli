@@ -679,7 +679,7 @@ function parseAssistantMessage(
   parsedData: ClaudeCodeMessage[],
   index: number,
   _options?: { includeSidechain?: boolean },
-): Message {
+): Message | null {
   const parts: (TextPart | UIToolPart)[] = [];
   let textContent = "";
 
@@ -742,6 +742,12 @@ function parseAssistantMessage(
       type: "text",
       text: textContent,
     });
+  }
+
+  // Entries whose only content block was something we don't render (e.g.
+  // extended-thinking blocks) would otherwise produce an empty bubble.
+  if (!textContent && parts.length === 0) {
+    return null;
   }
 
   return {
