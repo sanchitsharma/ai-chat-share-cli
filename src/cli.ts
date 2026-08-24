@@ -5,6 +5,7 @@ import path from "node:path";
 import { Command } from "@commander-js/extra-typings";
 import { getProvider } from "@/providers";
 import type { Message } from "@/types.js";
+import pkg from "../package.json" with { type: "json" };
 import { selectConversation } from "./tui";
 import { isRunningInClaudeCode, renderActiveConversationToHtml } from "./utils/claude.js";
 import { readFileOrStdin } from "./utils/file-utils.js";
@@ -17,7 +18,7 @@ program
   .description(
     "Turn your Claude Code (and other) conversation logs into a self-contained local HTML file. Nothing is uploaded anywhere.",
   )
-  .version("0.1.0");
+  .version(pkg.version);
 
 // Main command: render a conversation to a local HTML file
 program
