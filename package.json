@@ -1,0 +1,42 @@
+{
+  "name": "ai-chat-share-cli",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Render Claude Code conversation logs to a self-contained local HTML file. Nothing is uploaded anywhere.",
+  "license": "MIT",
+  "bin": {
+    "ai-chat-share-cli": "dist/cli.js",
+    "acs": "dist/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sanchitsharma/ai-chat-share-cli.git"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts --outfile dist/cli.js --target node",
+    "verify": "bun run scripts/verify-ai-sdk-format.ts",
+    "fix": "bun biome check --write",
+    "tsc": "tsc"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.56.0",
+    "@commander-js/extra-typings": "^14.0.0",
+    "@getpochi/tools": "^0.1.1",
+    "ai": "^5",
+    "commander": "^14.0.0",
+    "ink": "^6.1.0",
+    "react": "^19.1.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.1.2",
+    "@types/bun": "^1.2.19",
+    "@types/json-schema": "^7.0.15",
+    "bumpp": "^10.2.0",
+    "husky": "^9.1.7",
+    "react-devtools-core": "^6.1.5",
+    "typescript": "^5.8.3"
+  }
+}
