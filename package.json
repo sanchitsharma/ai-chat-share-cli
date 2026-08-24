@@ -1,6 +1,6 @@
 {
   "name": "ai-chat-share-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Render Claude Code conversation logs to a self-contained local HTML file. Nothing is uploaded anywhere.",
   "license": "MIT",
