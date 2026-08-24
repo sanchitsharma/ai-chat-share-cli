@@ -753,6 +753,18 @@ function parseAssistantMessage(
   } as Message;
 }
 
+/**
+ * Claude Code records some non-human turns (task notifications, injected
+ * reminders, etc.) with type: "user" as well. `origin.kind`/`promptSource`
+ * distinguish these from text the human actually typed — without this check
+ * they'd render indistinguishably from a real user message.
+ */
+function isAutomatedUserEntry(historyItem: ClaudeCodeMessage): boolean {
+  const originKind = historyItem.origin?.kind;
+  if (originKind) return originKind !== "human";
+  return historyItem.promptSource === "system";
+}
+
 function parseUserMessage(
   historyItem: ClaudeCodeMessage,
   nestedMessage: NestedMessage,
@@ -766,13 +778,18 @@ function parseUserMessage(
     return null;
   }
 
+  const automated = isAutomatedUserEntry(historyItem);
+  const role = automated ? "system" : "user";
+  const originKind = historyItem.origin?.kind;
+
   if ("content" in nestedMessage && typeof nestedMessage.content === "string") {
     return {
       id: historyItem.uuid,
-      role: "user",
+      role,
       content: nestedMessage.content,
       createdAt: new Date(historyItem.timestamp),
       parts: [{ type: "text", text: nestedMessage.content }],
+      ...(automated && { _originKind: originKind || "system" }),
     } as Message;
   }
 
@@ -812,10 +829,11 @@ function parseUserMessage(
 
     return {
       id: historyItem.uuid,
-      role: "user",
+      role,
       content: textContent,
       createdAt: new Date(historyItem.timestamp),
       ...(parts.length > 0 && { parts }),
+      ...(automated && { _originKind: originKind || "system" }),
     } as Message;
   }
 

@@ -59,10 +59,14 @@ function renderMessage(msg: Message): string {
     ? new Date(anyMsg.createdAt).toLocaleString()
     : "";
 
+  const roleLabel = anyMsg._originKind
+    ? `${msg.role} · ${anyMsg._originKind}`
+    : msg.role;
+
   return `
     <article class="message role-${escapeHtml(msg.role)}">
       <header>
-        <span class="role">${escapeHtml(msg.role)}</span>
+        <span class="role">${escapeHtml(roleLabel)}</span>
         <span class="time">${escapeHtml(time)}</span>
       </header>
       <div class="body">${body}</div>

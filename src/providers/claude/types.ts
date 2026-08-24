@@ -306,6 +306,11 @@ type HistoryMessage = {
   uuid: string;
   timestamp: string;
   toolUseResult?: unknown;
+  // Present on "user"-typed entries; distinguishes text the human actually
+  // typed from system-injected turns (task notifications, reminders, etc.)
+  // that Claude Code also records with type: "user".
+  promptSource?: "typed" | "system" | string;
+  origin?: { kind?: "human" | "task-notification" | string };
 };
 
 export type ClaudeCodeMessage = HistoryMessage;

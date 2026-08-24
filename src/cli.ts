@@ -35,7 +35,7 @@ program
     // Resolve provider with friendly error handling
     const provider = getProvider(opts.provider);
 
-    if (!filepath && !opts.output && isRunningInClaudeCode()) {
+    if (!filepath && isRunningInClaudeCode()) {
       const outPath = await renderActiveConversationToHtml(opts.output);
       printSuccess(outPath);
       return;
