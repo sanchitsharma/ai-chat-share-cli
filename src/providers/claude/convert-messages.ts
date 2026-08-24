@@ -615,8 +615,20 @@ export function convertToMessages(content: string): Message[] {
       JSON.parse(line),
     );
 
+    // A real human turn always follows an assistant reply. Entries chained
+    // via parentUuid onto another "user"-typed entry (rather than an
+    // assistant one) are synthetic continuations of the same tool/skill
+    // response — e.g. a Skill tool's result is split into a hidden
+    // tool_result entry followed by a second "user" entry carrying the
+    // skill's readable content. Used alongside origin/promptSource, which
+    // aren't always present, to catch these.
+    const typeByUuid = new Map<string, ClaudeCodeMessage["type"]>();
+    for (const item of parsedData) {
+      if (item.uuid) typeByUuid.set(item.uuid, item.type);
+    }
+
     const extractedMessages: Message[] = parsedData
-      .map((item, index) => parseMessage(item, parsedData, index))
+      .map((item, index) => parseMessage(item, parsedData, index, { typeByUuid }))
       .filter((message): message is Message => message !== null);
 
     // Clean up global state after conversion
@@ -631,11 +643,16 @@ export function convertToMessages(content: string): Message[] {
   }
 }
 
+type ParseOptions = {
+  includeSidechain?: boolean;
+  typeByUuid?: Map<string, ClaudeCodeMessage["type"]>;
+};
+
 function parseMessage(
   item: ClaudeCodeMessage,
   parsedData: ClaudeCodeMessage[],
   index: number,
-  options?: { includeSidechain?: boolean },
+  options?: ParseOptions,
 ): Message | null {
   if (!item.message || typeof item.message !== "object") {
     return null;
@@ -760,21 +777,32 @@ function parseAssistantMessage(
 }
 
 /**
- * Claude Code records some non-human turns (task notifications, injected
- * reminders, etc.) with type: "user" as well. `origin.kind`/`promptSource`
- * distinguish these from text the human actually typed — without this check
- * they'd render indistinguishably from a real user message.
+ * Claude Code records some non-human turns with type: "user" as well.
+ * Two independent signals catch these:
+ *  - `origin.kind`/`promptSource`, when present, say so directly (task
+ *    notifications, injected reminders).
+ *  - A real human turn always follows an assistant reply. An entry whose
+ *    parentUuid points at ANOTHER "user"-typed entry (rather than an
+ *    assistant one) is a synthetic continuation of the same tool/skill
+ *    response — e.g. a Skill tool result is split into a hidden
+ *    tool_result entry followed by a second "user" entry carrying the
+ *    skill's readable content, with neither field set on the second one.
+ * Without this, both render indistinguishably from a real user message.
  */
-function isAutomatedUserEntry(historyItem: ClaudeCodeMessage): boolean {
+function isAutomatedUserEntry(
+  historyItem: ClaudeCodeMessage,
+  parentType?: ClaudeCodeMessage["type"],
+): boolean {
   const originKind = historyItem.origin?.kind;
   if (originKind) return originKind !== "human";
-  return historyItem.promptSource === "system";
+  if (historyItem.promptSource === "system") return true;
+  return parentType === "user";
 }
 
 function parseUserMessage(
   historyItem: ClaudeCodeMessage,
   nestedMessage: NestedMessage,
-  options?: { includeSidechain?: boolean },
+  options?: ParseOptions,
 ): Message | null {
   // Skip sidechain user messages from final results unless explicitly included
   if (
@@ -784,9 +812,12 @@ function parseUserMessage(
     return null;
   }
 
-  const automated = isAutomatedUserEntry(historyItem);
+  const parentType = historyItem.parentUuid
+    ? options?.typeByUuid?.get(historyItem.parentUuid)
+    : undefined;
+  const automated = isAutomatedUserEntry(historyItem, parentType);
   const role = automated ? "system" : "user";
-  const originKind = historyItem.origin?.kind;
+  const originKind = historyItem.origin?.kind || (automated ? "tool-output" : undefined);
 
   if ("content" in nestedMessage && typeof nestedMessage.content === "string") {
     return {
